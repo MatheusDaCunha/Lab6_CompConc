@@ -15,6 +15,8 @@
 int leit=0; //contador de threads lendo
 int escr=0; //contador de threads escrevendo
 
+int filaDeEscrita = 0;
+
 //variaveis para sincronizacao
 pthread_mutex_t mutex;
 pthread_cond_t cond_leit, cond_escr;
@@ -23,7 +25,7 @@ pthread_cond_t cond_leit, cond_escr;
 void InicLeit (int id) {
    pthread_mutex_lock(&mutex);
    printf("L[%d] quer ler\n", id);
-   while(escr > 0) {
+   while(escr > 0 || filaDeEscrita > 0) {
      printf("L[%d] bloqueou\n", id);
      pthread_cond_wait(&cond_leit, &mutex);
      printf("L[%d] desbloqueou\n", id);
@@ -44,6 +46,7 @@ void FimLeit (int id) {
 //entrada escrita
 void InicEscr (int id) {
    pthread_mutex_lock(&mutex);
+   filaDeEscrita++;
    printf("E[%d] quer escrever\n", id);
    while((leit>0) || (escr>0)) {
      printf("E[%d] bloqueou\n", id);
@@ -51,6 +54,7 @@ void InicEscr (int id) {
      printf("E[%d] desbloqueou\n", id);
    }
    escr++;
+   filaDeEscrita--;
    pthread_mutex_unlock(&mutex);
 }
 
@@ -59,8 +63,12 @@ void FimEscr (int id) {
    pthread_mutex_lock(&mutex);
    printf("E[%d] terminou de escrever\n", id);
    escr--;
-   pthread_cond_signal(&cond_escr);
-   pthread_cond_broadcast(&cond_leit);
+   if(filaDeEscrita > 0){
+      pthread_cond_signal(&cond_escr);
+    }
+    else{
+      pthread_cond_broadcast(&cond_leit);
+    }
    pthread_mutex_unlock(&mutex);
 }
 
@@ -72,7 +80,7 @@ void * leitor (void * arg) {
     printf("Leitora %d esta lendo\n", *id);
     FimLeit(*id);
     sleep(1);
-  } 
+  }
   free(arg);
   pthread_exit(NULL);
 }
@@ -85,7 +93,7 @@ void * escritor (void * arg) {
     printf("Escritora %d esta escrevendo\n", *id);
     FimEscr(*id);
     sleep(1);
-  } 
+  }
   free(arg);
   pthread_exit(NULL);
 }
@@ -105,13 +113,13 @@ int main(void) {
   for(int i=0; i<L; i++) {
     id[i] = i+1;
     if(pthread_create(&tid[i], NULL, leitor, (void *) &id[i])) exit(-1);
-  } 
-  
+  }
+
   //cria as threads escritoras
   for(int i=0; i<E; i++) {
     id[i+L] = i+1;
     if(pthread_create(&tid[i+L], NULL, escritor, (void *) &id[i+L])) exit(-1);
-  } 
+  }
 
   pthread_exit(NULL);
   return 0;
